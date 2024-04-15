@@ -1,15 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:usb_serial/usb_serial.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  requestPermission(Permission.bluetooth);
-  requestPermission(Permission.bluetoothConnect);
-  requestPermission(Permission.bluetoothScan);
   runApp(const StriderApp());
 }
 
@@ -51,10 +49,9 @@ bool connected = false;
 double lastL = 0.0;
 double lastR = 0.0;
 
+late UsbPort port;
+
 class MainPageState extends State<MainPage> {
-  BluetoothState bTS = BluetoothState.UNKNOWN;
-  late BluetoothDevice striderInstance;
-  late BluetoothConnection connectionToStrider;
   void _axisChange(bool lR, double value) {
     setState(() {
       if (lR) {
@@ -66,34 +63,34 @@ class MainPageState extends State<MainPage> {
     calculateInput();
   }
 
-  void bluetoothWrite(String input) {
-    connectionToStrider.output.add(utf8.encode(input));
+  void serialWrite(String input) {
+    port.write(utf8.encode(input));
   }
 
   void calculateInput() {
     if (lastL > 0.125) {
       if (lastR > 0.125) {
-        bluetoothWrite("W");
+        serialWrite("W");
       } else if (lastR < -0.125) {
-        bluetoothWrite("D");
+        serialWrite("D");
       } else {
-        bluetoothWrite("Q");
+        serialWrite("Q");
       }
     } else if (lastL < -0.125) {
       if (lastR > 0.125) {
-        bluetoothWrite("A");
+        serialWrite("A");
       } else if (lastR < -0.125) {
-        bluetoothWrite("S");
+        serialWrite("S");
       } else {
-        bluetoothWrite("Y");
+        serialWrite("Y");
       }
     } else {
       if (lastR > 0.125) {
-        bluetoothWrite("E");
+        serialWrite("E");
       } else if (lastR < -0.125) {
-        bluetoothWrite("C");
+        serialWrite("C");
       } else {
-        bluetoothWrite("0");
+        serialWrite("0");
       }
     }
   }
@@ -101,46 +98,19 @@ class MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-    btsGetter();
-    stateListener();
+
+    setPort();
   }
 
-  btsGetter() {
-    FlutterBluetoothSerial.instance.state.then((state) {
-      bTS = state;
-      setState(() {});
-    });
-  }
+  void setPort() async {
+    List<UsbDevice> devices = await UsbSerial.listDevices();
 
-  stateListener() {
-    FlutterBluetoothSerial.instance
-        .onStateChanged()
-        .listen((BluetoothState state) {
-      bTS = state;
+    port = await devices[0].create() as UsbPort;
 
-      setState(() {});
-    });
-  }
+    port.open();
 
-  Future<bool> getDevice() async {
-    List<BluetoothDevice> devices =
-        await FlutterBluetoothSerial.instance.getBondedDevices();
-
-    for (BluetoothDevice dev in devices) {
-      if (dev.name == "Strider") {
-        striderInstance = dev;
-        connectionToStrider =
-            await BluetoothConnection.toAddress(striderInstance.address);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  throwDevice() {
-    connectionToStrider.close();
-    connectionToStrider.dispose();
+    port.setPortParameters(
+        115200, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
   }
 
   @override
@@ -166,6 +136,7 @@ class MainPageState extends State<MainPage> {
               onChangeEnd: (value) {
                 setState(() {
                   lastL = 0.0;
+                  calculateInput();
                 });
               },
             ),
@@ -173,27 +144,9 @@ class MainPageState extends State<MainPage> {
         ),
         SizedBox(
           width: MediaQuery.of(context).size.width / 2,
-          child: FractionallySizedBox(
-              widthFactor: 0.75,
-              child: FloatingActionButton(
-                  child: connected
-                      ? const Text("Disconnect")
-                      : const Text("Connect to a nearby Strider"),
-                  onPressed: () async {
-                    bool connectedStatus = false;
-
-                    if (connected) {
-                      await FlutterBluetoothSerial.instance.requestDisable();
-                      throwDevice();
-                    } else {
-                      await FlutterBluetoothSerial.instance.requestEnable();
-                      connectedStatus = await getDevice();
-                    }
-
-                    setState(() {
-                      connected = connectedStatus;
-                    });
-                  })),
+          child: const FractionallySizedBox(
+            widthFactor: 0.75,
+          ),
         ),
         SizedBox(
           width: MediaQuery.of(context).size.width / 4,
@@ -210,6 +163,7 @@ class MainPageState extends State<MainPage> {
               onChangeEnd: (value) {
                 setState(() {
                   lastR = 0.0;
+                  calculateInput();
                 });
               },
             ),

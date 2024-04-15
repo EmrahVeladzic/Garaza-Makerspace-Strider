@@ -1,9 +1,3 @@
-#include "BluetoothSerial.h"
-
-
-
-#define L_Enable 22
-#define R_Enable 23
 
 #define L_FWD 19
 #define R_FWD 17
@@ -28,30 +22,29 @@
 
 #define RUNTIME 10
 
-BluetoothSerial BT_S;
+
 
 void setup() {
   // put your setup code here, to run once:
 
-  pinMode(L_Enable,OUTPUT);
-  pinMode(R_Enable,OUTPUT);
+
   pinMode(L_FWD,OUTPUT);
   pinMode(L_REV,OUTPUT);
   pinMode(R_FWD,OUTPUT);
   pinMode(R_REV,OUTPUT);
 
- Serial.begin(115200);
-  BT_S.begin("Strider");
+  Serial.begin(115200);
+
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  if(BT_S.available()){
+  if(Serial.available()){
   
     enable();
 
 
-    char cmd = BT_S.read();
+    char cmd = Serial.read();
 
     switch(cmd){
       case FWD:forward();break;
@@ -64,16 +57,16 @@ void loop() {
       case LR:L_only_right();break;
       case RR:R_only_right();break;
 
-      default:break;
+      default:disable();break;
 
     }
 
+   
+    
     
 
-    delay(RUNTIME);
 
-
-    disable();
+    
 
   }
 
@@ -131,12 +124,10 @@ digitalWrite(R_REV,HIGH);
 }
 
 void enable(){
-digitalWrite(L_Enable,HIGH);
-digitalWrite(R_Enable,HIGH);
+
 }
 void disable(){
-digitalWrite(L_Enable,LOW);
-digitalWrite(R_Enable,LOW);
+
 
 digitalWrite(L_FWD,LOW);
 digitalWrite(R_FWD,LOW);
